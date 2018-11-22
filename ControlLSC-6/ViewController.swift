@@ -19,25 +19,26 @@ class ViewController: UIViewController {
     @IBOutlet weak var textField: UITextField!
     @IBOutlet weak var sendBtn: UIButton!
     
-    var sendIndex = -1;
-    var startIndex = -1;
-    var endIndex = -1;
+    var sendIndex = 0;
+    var startIndex = 0;
+    var endIndex = 0;
     @IBOutlet weak var textAction1: UITextField!
     @IBOutlet weak var textAction2: UITextField!
     @IBOutlet weak var sendBtn4: UIButton!
     @IBAction func send4Action(_ sender: UIButton) {
-        guard self.characteristic != nil, let startIndexTemp=Int(self.textAction1.text!, radix: 16), let endIndexTemp=Int(self.textAction2.text!, radix: 16) else {
+        guard self.characteristic != nil, let startIndexTemp=UInt8(self.textAction1.text!, radix: 16), let endIndexTemp=UInt8(self.textAction2.text!, radix: 16) else {
             showErrorAlertWithTitle("Error", message: "Please ensure the input is valid")
             return
         }
-        startIndex = startIndexTemp
-        endIndex = endIndexTemp
-        sendIndex = startIndex
+        startIndex = Int(startIndexTemp)
+        endIndex = Int(endIndexTemp)
+        sendIndex = Int(startIndex)
+        print("startIndex: \(startIndex)")
         
-        let preDatas = ["55", "55", "05", "06", "\(startIndex)", "01", "00"]
+        let preDatas = ["55", "55", "05", "06", "\(sendIndex)", "01", "00"]
         for preData in preDatas {
-            let dec = Int(preData, radix: 16)!
-            let data = String(UnicodeScalar(dec)!).data(using: .utf8)!
+            //像这种之前固定的数据是不会有错的，所以其实可以直接强制转换的。而且之前的startIndex在guard里面也已经确保了是Uint8了。
+            let data = convertToUInts8Data(from: preData)!
             peripheral.writeValue(data, for: self.characteristic, type: .withoutResponse)
         }
     }
@@ -48,22 +49,26 @@ class ViewController: UIViewController {
     @IBOutlet weak var send3Text: UITextField!
     @IBOutlet weak var send3Text2: UITextField!
     @IBOutlet weak var send3Text3: UITextField!
+//    之前发送数据的三段式
+//    let dec1=Int(self.send3Text.text!, radix: 16)
+//    let data1=UnicodeScalar(dec1)
+//    let data = String(data1).data(using: .utf8)!
     @IBAction func send3Action(_ sender: UIButton) {
-        guard self.characteristic != nil, let dec1=Int(self.send3Text.text!, radix: 16), let data1=UnicodeScalar(dec1), let dec2 = Int(self.send3Text2.text!, radix: 16), let data2 = UnicodeScalar(dec2), let dec3 = Int(self.send3Text3.text!, radix: 16), let data3 = UnicodeScalar(dec3) else {
+        guard self.characteristic != nil, let data1 = convertToUInts8Data(from: self.send3Text.text!), let data2 = convertToUInts8Data(from: self.send3Text2.text!), let data3 = convertToUInts8Data(from: self.send3Text3.text!) else {
             showErrorAlertWithTitle("Error", message: "Please ensure the input is valid")
             return
         }
         
         let preDatas = ["55", "55", "05", "06"]
         for preData in preDatas {
-            let dec = Int(preData, radix: 16)!
-            let data = String(UnicodeScalar(dec)!).data(using: .utf8)!
+            //像这种之前固定的数据是不会有错的，所以其实可以直接强制转换的。
+            let data = convertToUInts8Data(from: preData)!
             peripheral.writeValue(data, for: self.characteristic, type: .withoutResponse)
         }
         
-        peripheral.writeValue(String(data1).data(using: .utf8)!, for: self.characteristic, type: .withoutResponse)
-        peripheral.writeValue(String(data2).data(using: .utf8)!, for: self.characteristic, type: .withoutResponse)
-        peripheral.writeValue(String(data3).data(using: .utf8)!, for: self.characteristic, type: .withoutResponse)
+        peripheral.writeValue(data1, for: self.characteristic, type: .withoutResponse)
+        peripheral.writeValue(data2, for: self.characteristic, type: .withoutResponse)
+        peripheral.writeValue(data3, for: self.characteristic, type: .withoutResponse)
     }
     
     var receiveStr = "" {
@@ -84,15 +89,13 @@ class ViewController: UIViewController {
             return
         }
         self.textField.resignFirstResponder()
-        
-        
         //注意：理一理从手机发到单片机的原理：我从这里发一个数字5，不过是要打包成string的，即String（5）.data(using: .utf8)，之后单片机收到的是字符‘5’（也可换算成16进制ascii码），所以若对方要收到0x55这一ascii，那么也就是说我要发送的字符是ascii为0x55即可，那么我也可以把U发过去就好了。但是你要知道一个无符号16进制最大能到FF，但是我这个ascii第一位是预留的他只是用了后7位位0x7F，导致发送的消息超过0x7E以后就出现了错误.
         //所以经过分析我发现首先我不是转成ascii而是unicode，但是我找到了直接byte转成data的方法，注意byte就是UInt8.
         
         //以下是对textfield中输入的每两个用空格分隔的16进制先转成10进制，再转成相应的ascii码，然后转成data发送出去。
         let text = self.textField.text?.split(separator: " ")
         for hexStr in text! {
-            if let data = convertToUInts8Data(string: String(hexStr)) {
+            if let data = convertToUInts8Data(from: String(hexStr)) {
                 peripheral.writeValue(data, for: self.characteristic, type: .withoutResponse)
                 continue
             }
@@ -104,6 +107,7 @@ class ViewController: UIViewController {
     
     @IBAction func sendTrail(_ sender: UIButton) {
         guard self.characteristic != nil else { return }
+        //下面这个还是可以直接用以前方法么好了的，因为单片机明指要接受到这个才结束接受字符串，那么我在这里也明摆地写出来就好了喽。而且这里直接把\r\n下载一个字符串里就好了的，不需要分开一个个写即可
         let data = String("\r\n").data(using: .utf8)!
         peripheral.writeValue(data, for: self.characteristic, type: .withoutResponse)
     }
@@ -346,9 +350,11 @@ extension ViewController: CBCentralManagerDelegate, CBPeripheralDelegate {
         } else {
             let data = NSData(data: characteristic.value!)
             let value = data.description.replacingOccurrences(of: "<", with: "").replacingOccurrences(of: ">", with: "").replacingOccurrences(of: " ", with: "").uppercased()
+            print(value)
             receiveStr += "\(value)\n"
             
             guard startIndex != -1 else { return }
+            // 注意：动作组刚执行时：返回的事55550506~~~,然后动作组结束返回55550508～～～。还有暂停的时候会返回5555020755550207（不知为何返回的都是两遍）。然后还有读取电压会返回接近于5555040F8718的数字，直接控制单个舵机，和改变动作组速度貌似不会有返回数据。
             if value.hasPrefix("55550508") {
                 sendIndex += 1;
                 if sendIndex <= endIndex {
@@ -359,8 +365,8 @@ extension ViewController: CBCentralManagerDelegate, CBPeripheralDelegate {
                         peripheral.writeValue(data, for: self.characteristic, type: .withoutResponse)
                     }
                 }
-                
-                if sendIndex == endIndex {
+                print("startIndex: \(startIndex)")
+                if sendIndex >= endIndex {
                     sendIndex = -1
                     startIndex = -1
                     endIndex = -1
@@ -466,9 +472,9 @@ extension ViewController {
         self.present(ac, animated: true)
     }
     
-    func convertToUInts8Data(string: String) -> Data? {
-        if let byte = UInt8(string) {
-            return Data(bytes: [byte])
+    func convertToUInts8Data(from string: String) -> Data? {
+        if let decimal = UInt8(string, radix: 16) {
+            return Data(bytes: [decimal])
         }
         return nil
     }
