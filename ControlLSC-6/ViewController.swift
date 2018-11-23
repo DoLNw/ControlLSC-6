@@ -35,12 +35,19 @@ class ViewController: UIViewController {
         sendIndex = Int(startIndex)
         print("startIndex: \(startIndex)")
         
-        let preDatas = ["55", "55", "05", "06", "\(sendIndex)", "01", "00"]
-        for preData in preDatas {
-            //像这种之前固定的数据是不会有错的，所以其实可以直接强制转换的。而且之前的startIndex在guard里面也已经确保了是Uint8了。
-            let data = convertToUInts8Data(from: preData)!
-            peripheral.writeValue(data, for: self.characteristic, type: .withoutResponse)
+        //可不可以直接向我下面这样包装在一个Data里面呢？
+        //此处估计不会出错
+        let preStrValues = ["55", "55", "05", "06", "\(sendIndex)", "01", "00"]
+        if let datas = convertToUInt8Datas(from: preStrValues, orFrom: nil) {
+            peripheral.writeValue(datas, for: self.characteristic, type: .withoutResponse)
         }
+        
+//        let preDatas = ["55", "55", "05", "06", "\(sendIndex)", "01", "00"]
+//        for preData in preDatas {
+//            //像这种之前固定的数据是不会有错的，所以其实可以直接强制转换的。而且之前的startIndex在guard里面也已经确保了是Uint8了。
+//            let data = convertToUInts8Data(from: preData)!
+//            peripheral.writeValue(data, for: self.characteristic, type: .withoutResponse)
+//        }
     }
     
     @IBOutlet weak var sendTraulBtn: UIButton!
@@ -60,10 +67,9 @@ class ViewController: UIViewController {
         }
         
         let preDatas = ["55", "55", "05", "06"]
-        for preData in preDatas {
+        if let datas = convertToUInt8Datas(from: preDatas, orFrom: nil) {
             //像这种之前固定的数据是不会有错的，所以其实可以直接强制转换的。
-            let data = convertToUInts8Data(from: preData)!
-            peripheral.writeValue(data, for: self.characteristic, type: .withoutResponse)
+            peripheral.writeValue(datas, for: self.characteristic, type: .withoutResponse)
         }
         
         peripheral.writeValue(data1, for: self.characteristic, type: .withoutResponse)
@@ -93,16 +99,22 @@ class ViewController: UIViewController {
         //所以经过分析我发现首先我不是转成ascii而是unicode，但是我找到了直接byte转成data的方法，注意byte就是UInt8.
         
         //以下是对textfield中输入的每两个用空格分隔的16进制先转成10进制，再转成相应的ascii码，然后转成data发送出去。
-        let text = self.textField.text?.split(separator: " ")
-        for hexStr in text! {
-            if let data = convertToUInts8Data(from: String(hexStr)) {
-                peripheral.writeValue(data, for: self.characteristic, type: .withoutResponse)
-                continue
+        if let text = self.textField.text?.split(separator: " ") {
+            if let datas = convertToUInt8Datas(from: nil, orFrom: text) {
+                peripheral.writeValue(datas, for: self.characteristic, type: .withoutResponse)
             }
-            
-            showErrorAlertWithTitle("Error", message: "Please ensure the input is valid")
-            return
         }
+        
+//        let text = self.textField.text?.split(separator: " ")
+//        for hexStr in text! {
+//            if let data = convertToUInts8Data(from: String(hexStr)) {
+//                peripheral.writeValue(data, for: self.characteristic, type: .withoutResponse)
+//                continue
+//            }
+//
+//            showErrorAlertWithTitle("Error", message: "Please ensure the input is valid")
+//            return
+//        }
     }
     
     @IBAction func sendTrail(_ sender: UIButton) {
@@ -123,7 +135,7 @@ class ViewController: UIViewController {
     var disConnectBtn: UIButton!
     var ConnectBtn: UIButton!
     var activityView: UIActivityIndicatorView!
-
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         self.title = "UnConnected"
@@ -159,12 +171,12 @@ class ViewController: UIViewController {
         self.instructionsTextView.text = """
         作用   帧头 长度指令 参数
         舵机  55 55 08 03 01 E8 03 01 D0 07
-        舵机  55 55 0B 03 02 20 03 02 B0 04 09 FC 08
+        舵机  55 55 0B 03 02 20 03 02 B0 04 03 B0 04(舵机2、3号都到1200位置)
         动组  55 55 05 06 08 01 00
         动组  55 55 05 06 02 00 00
         停止  55 55 02 07
-        速度  55 55 05 0B 08 32 00
-        速度  55 55 05 0B FF 2C 01
+        速度  55 55 05 0B 08 32 00(注意只控制动作组的百分比50)
+        速度  55 55 05 0B FF 2C 01(百分比300)
         电压  55 55 02 0F
         """
         
@@ -479,5 +491,30 @@ extension ViewController {
         return nil
     }
     
+    //没有直接[Substring]转[String]的方法貌似？
+    func convertToUInt8Datas(from string: [String]?, orFrom substring: [Substring]?) -> Data? {
+        var prevalues: [UInt8] = []
+        if string != nil {
+            for preStr in string! {
+                //由于我确定我的这个强制转换不会有问题，所以我不用可选绑定，直接强制转换了啊。
+                if let uint8 = UInt8(preStr, radix: 16) {
+                    prevalues.append(uint8)
+                    continue
+                }
+                return nil
+            }
+        } else {
+            for preStr in substring! {
+                //这个原来用substring也可以的噶
+                if let uint8 = UInt8(preStr, radix: 16) {
+                    prevalues.append(uint8)
+                    continue
+                }
+                return nil
+            }
+        }
+        
+        let datas = Data(bytes: prevalues)
+        return datas
+    }
 }
-
