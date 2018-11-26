@@ -16,6 +16,13 @@ let SCREEN_HEIGHT = UIScreen.main.bounds.size.height
 let SEGUED_HEIGHT = UIScreen.main.bounds.size.height/2+100
 
 class ViewController: UIViewController {
+    let frame_header_half: UInt8 = 0x55        //帧头
+    let CMD_SERVO_MOVE: UInt8 = 0x03           //舵机移动指令,数据长度 Length =控制舵机的个数×3+5
+    let CMD_ACTION_GROUP_RUN: UInt8 = 0x06     //运行动作组指令,数据长度 Length=5
+    let CMD_ACTION_GROUP_STOP: UInt8 = 0x07    //停止动作做指令,数据长度 Length=2
+    let CMD_ACTION_GROUP_SPEED: UInt8 = 0x0B   //设置动作组运行速度,数据长度 Length=5
+    let CMD_GET_BATTERY_VOLTAGE:UInt8 = 0x0F   //获取电池电压指令,数据长度 Length=2
+    
     @IBOutlet weak var textField: UITextField!
     @IBOutlet weak var sendBtn: UIButton!
     
@@ -90,6 +97,7 @@ class ViewController: UIViewController {
     @IBOutlet weak var instructionsTextView: UITextView!
     
     @IBAction func sendAction(_ sender: UIButton) {
+        self.reset()
         guard self.characteristic != nil && self.textField.text != "" else {
             showErrorAlertWithTitle("Error", message: "Please ensure the input is valid")
             return
@@ -361,12 +369,23 @@ extension ViewController: CBCentralManagerDelegate, CBPeripheralDelegate {
             print(error.localizedDescription)
         } else {
             let data = NSData(data: characteristic.value!)
+            
             let value = data.description.replacingOccurrences(of: "<", with: "").replacingOccurrences(of: ">", with: "").replacingOccurrences(of: " ", with: "").uppercased()
-            print(value)
             receiveStr += "\(value)\n"
             
             guard startIndex != -1 else { return }
             // 注意：动作组刚执行时：返回的事55550506~~~,然后动作组结束返回55550508～～～。还有暂停的时候会返回5555020755550207（不知为何返回的都是两遍）。然后还有读取电压会返回接近于5555040F8718的数字，直接控制单个舵机，和改变动作组速度貌似不会有返回数据。
+            
+            if value.hasPrefix("5555040F") {
+//                let start = value.index(value.startIndex, offsetBy: 8)
+//                let end = value.index(value.startIndex, offsetBy: 9)
+//                value[start...end]
+//                let uint8s = characteristic.value!.withUnsafeBytes{[UInt8](UnsafeBufferPointer(start: $0,  count: characteristic.value!.count))}
+                
+                let bytes = [UInt8](characteristic.value!)
+                receiveStr += "batteryVolt=\(Int(bytes[5])*256+Int(bytes[4]))\n"
+            }
+            
             if value.hasPrefix("55550508") {
                 sendIndex += 1;
                 if sendIndex <= endIndex {
@@ -377,7 +396,6 @@ extension ViewController: CBCentralManagerDelegate, CBPeripheralDelegate {
                         peripheral.writeValue(data, for: self.characteristic, type: .withoutResponse)
                     }
                 }
-                print("startIndex: \(startIndex)")
                 if sendIndex >= endIndex {
                     sendIndex = -1
                     startIndex = -1
@@ -516,5 +534,90 @@ extension ViewController {
         
         let datas = Data(bytes: prevalues)
         return datas
+    }
+}
+
+extension ViewController {
+    func moveServo(servoID: UInt8, position: Int, time: Int) {
+        guard servoID<31 || time>0 else { showErrorAlertWithTitle("Unexpected arg", message: nil); return }
+        
+        var dataout = [frame_header_half, frame_header_half, 8, CMD_SERVO_MOVE]
+        dataout += [1, UInt8(time%256), UInt8(time/256), servoID, UInt8(position%256), UInt8(position/256)]
+        
+        self.peripheral.writeValue(Data(bytes: dataout), for: self.characteristic, type: .withoutResponse)
+    }
+    
+    func moveServos(num: UInt8, time: Int, _ args: Int...) {
+        guard num>=1 || num<=32 || time>0 else { showErrorAlertWithTitle("Unexpected arg", message: nil); return }
+        guard args.count == num*2 else { showErrorAlertWithTitle("Unexpected arg", message: nil); return }
+        
+        var dataout = [frame_header_half, frame_header_half, UInt8(num*3+5), CMD_SERVO_MOVE, num, UInt8(time%256), UInt8(time/256)]
+        
+        var temp = args
+        for _ in 0..<num {
+            dataout += [UInt8(temp.removeFirst()), UInt8(temp.first!%256), UInt8(temp.removeFirst()/256)]
+        }
+        
+        self.peripheral.writeValue(Data(bytes: dataout), for: self.characteristic, type: .withoutResponse)
+    }
+    
+    func runActionGroup(numberOfAction: UInt8, time: Int) {
+        let dataout = [frame_header_half, frame_header_half, 5, CMD_ACTION_GROUP_RUN, numberOfAction, UInt8(time%256), UInt8(time/256)]
+        
+        self.peripheral.writeValue(Data(bytes: dataout), for: self.characteristic, type: .withoutResponse)
+    }
+    
+    func stopActionGroup() {
+        let dataout = [frame_header_half, frame_header_half, 2, CMD_ACTION_GROUP_STOP]
+        
+        self.peripheral.writeValue(Data(bytes: dataout), for: self.characteristic, type: .withoutResponse)
+    }
+    
+    func setActionGroupSpeed(numberOfAction: UInt8, speed: Int) {
+        let dataout = [frame_header_half, frame_header_half, 5, CMD_ACTION_GROUP_SPEED, numberOfAction, UInt8(speed%256), UInt8(speed/256)]
+        
+        self.peripheral.writeValue(Data(bytes: dataout), for: self.characteristic, type: .withoutResponse)
+    }
+    
+    func setAllActionGroupSpeed(speed: Int) {
+        setActionGroupSpeed(numberOfAction: 0xFF, speed: speed)
+    }
+    
+    func getBatteryVoltage() {
+        let dataout = [frame_header_half, frame_header_half, 2, CMD_GET_BATTERY_VOLTAGE]
+        
+        self.peripheral.writeValue(Data(bytes: dataout), for: self.characteristic, type: .withoutResponse)
+    }
+    
+    func reset() {
+        self.moveServos(num: 6, time: 1000, 1, 2400, 2, 1500, 3, 1000, 4, 1000, 5, 500, 6, 2000)
+    }
+    
+    func scratchHigh() {
+        self.runActionGroup(numberOfAction: 0, time: 1)
+    }
+    
+    func scratchMiddle() {
+        self.runActionGroup(numberOfAction: 4, time: 1)
+    }
+    
+    func scratchLow() {
+        self.runActionGroup(numberOfAction: 1, time: 1)
+    }
+    
+    func putHigh() {
+        self.runActionGroup(numberOfAction: 3, time: 1)
+    }
+    
+    func putLow() {
+        self.runActionGroup(numberOfAction: 2, time: 1)
+    }
+    
+    func free() {
+        
+    }
+    
+    func free_sww() {
+        self.moveServo(servoID: 1, position: 1800, time: 1000)
     }
 }
