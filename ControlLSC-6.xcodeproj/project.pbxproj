@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		021E923521AD614100B89F1B /* LSC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 021E923421AD614100B89F1B /* LSC.swift */; };
 		023442F221A6947B0043204D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 023442F121A6947B0043204D /* AppDelegate.swift */; };
 		023442F921A6947E0043204D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 023442F821A6947E0043204D /* Assets.xcassets */; };
 		023442FC21A6947E0043204D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 023442FA21A6947E0043204D /* LaunchScreen.storyboard */; };
@@ -19,6 +20,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		021E923421AD614100B89F1B /* LSC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LSC.swift; sourceTree = "<group>"; };
 		023442EE21A6947B0043204D /* ControlLSC-6.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ControlLSC-6.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		023442F121A6947B0043204D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		023442F821A6947E0043204D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -65,6 +67,7 @@
 				023442F121A6947B0043204D /* AppDelegate.swift */,
 				0234430321A694AF0043204D /* Main.storyboard */,
 				0234430421A694AF0043204D /* ViewController.swift */,
+				021E923421AD614100B89F1B /* LSC.swift */,
 				0234430721A694AF0043204D /* ScanTableViewController.swift */,
 				0234430621A694AF0043204D /* TransAnimatorBack.swift */,
 				0234430521A694AF0043204D /* Transition.swift */,
@@ -152,6 +155,7 @@
 				0234430C21A694AF0043204D /* TransAnimatorBack.swift in Sources */,
 				023442F221A6947B0043204D /* AppDelegate.swift in Sources */,
 				0234430D21A694AF0043204D /* ScanTableViewController.swift in Sources */,
+				021E923521AD614100B89F1B /* LSC.swift in Sources */,
 				0234430E21A694AF0043204D /* TransitionAnimator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
